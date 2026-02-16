@@ -10,6 +10,20 @@ import type { ResolvedFeishuAccount } from "./types.js";
 import { createFeishuWSClient, createEventDispatcher } from "./client.js";
 import { resolveFeishuAccount, listEnabledFeishuAccounts } from "./accounts.js";
 import { handleFeishuMessage, type FeishuMessageEvent, type FeishuBotAddedEvent } from "./bot.js";
+
+// Type for im.chat.updated_v1 event
+type FeishuChatUpdatedEvent = {
+  chat_id: string;
+  operator_id?: {
+    open_id?: string;
+    user_id?: string;
+    union_id?: string;
+  };
+  external?: boolean;
+  operator_tenant_key?: string;
+  // The event doesn't specify exactly what changed, so we can't
+  // easily tell if it was an announcement update without polling
+};
 import { probeFeishu } from "./probe.js";
 
 export type MonitorFeishuOpts = {
@@ -96,6 +110,20 @@ function registerEventHandlers(
         log(`feishu[${accountId}]: bot removed from chat ${event.chat_id}`);
       } catch (err) {
         error(`feishu[${accountId}]: error handling bot removed event: ${String(err)}`);
+      }
+    },
+    "im.chat.updated_v1": async (data) => {
+      try {
+        const event = data as unknown as FeishuChatUpdatedEvent;
+        log(`feishu[${accountId}]: chat updated: ${event.chat_id}`);
+        // Note: This event fires for ANY chat configuration change
+        // (name, icon, announcement, etc.). To specifically detect
+        // announcement changes, we'd need to:
+        // 1. Track announcement revision_id per chat
+        // 2. On this event, fetch the latest announcement and compare
+        // For now, we just log that something changed.
+      } catch (err) {
+        error(`feishu[${accountId}]: error handling chat updated event: ${String(err)}`);
       }
     },
   });
