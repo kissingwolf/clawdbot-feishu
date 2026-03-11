@@ -192,6 +192,12 @@ export type SendMediaResult = {
   chatId: string;
 };
 
+function assertNonEmptyMediaBuffer(buffer: Buffer, name: string): void {
+  if (buffer.length === 0) {
+    throw new Error(`Feishu media upload failed: "${name}" is empty (0 bytes)`);
+  }
+}
+
 /**
  * Upload an image to Feishu and get an image_key for sending.
  * Supports: JPEG, PNG, WEBP, GIF, TIFF, BMP, ICO
@@ -210,15 +216,16 @@ export async function uploadImageFeishu(params: {
 
   const client = createFeishuClient(account);
 
-  // SDK expects a Readable stream, not a Buffer
-  // Use type assertion since SDK actually accepts any Readable at runtime
-  const imageStream =
-    typeof image === "string" ? fs.createReadStream(image) : Readable.from(image);
+  if (Buffer.isBuffer(image)) {
+    assertNonEmptyMediaBuffer(image, "image");
+  }
+
+  const imagePayload = typeof image === "string" ? fs.createReadStream(image) : image;
 
   const response = await client.im.image.create({
     data: {
       image_type: imageType,
-      image: imageStream as any,
+      image: imagePayload as any,
     },
   });
 
@@ -258,16 +265,17 @@ export async function uploadFileFeishu(params: {
 
   const client = createFeishuClient(account);
 
-  // SDK expects a Readable stream, not a Buffer
-  // Use type assertion since SDK actually accepts any Readable at runtime
-  const fileStream =
-    typeof file === "string" ? fs.createReadStream(file) : Readable.from(file);
+  if (Buffer.isBuffer(file)) {
+    assertNonEmptyMediaBuffer(file, fileName);
+  }
+
+  const filePayload = typeof file === "string" ? fs.createReadStream(file) : file;
 
   const response = await client.im.file.create({
     data: {
       file_type: fileType,
       file_name: fileName,
-      file: fileStream as any,
+      file: filePayload as any,
       ...(duration !== undefined && { duration }),
     },
   });
@@ -511,6 +519,8 @@ export async function sendMediaFeishu(params: {
   } else {
     throw new Error("Either mediaUrl or mediaBuffer must be provided");
   }
+
+  assertNonEmptyMediaBuffer(buffer, name);
 
   // Determine if it's an image based on extension
   const ext = path.extname(name).toLowerCase();

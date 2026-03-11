@@ -5,7 +5,7 @@ vi.mock("../client.js", () => ({
 }));
 
 import { createFeishuClient } from "../client.js";
-import { uploadFileFeishu } from "../media.js";
+import { uploadFileFeishu, uploadImageFeishu } from "../media.js";
 
 describe("uploadFileFeishu file_name handling", () => {
   const cfg = {
@@ -17,16 +17,24 @@ describe("uploadFileFeishu file_name handling", () => {
     },
   } as any;
 
-  let createSpy: ReturnType<typeof vi.fn>;
+  let fileCreateSpy: ReturnType<typeof vi.fn>;
+  let imageCreateSpy: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
     vi.clearAllMocks();
-    createSpy = vi.fn(async () => ({
+    fileCreateSpy = vi.fn(async () => ({
       code: 0,
       file_key: "fk_test_123",
     }));
+    imageCreateSpy = vi.fn(async () => ({
+      code: 0,
+      image_key: "img_test_123",
+    }));
     vi.mocked(createFeishuClient).mockReturnValue({
-      im: { file: { create: createSpy } },
+      im: {
+        file: { create: fileCreateSpy },
+        image: { create: imageCreateSpy },
+      },
     } as any);
   });
 
@@ -38,7 +46,7 @@ describe("uploadFileFeishu file_name handling", () => {
       fileType: "pdf",
     });
 
-    const data = createSpy.mock.calls[0][0].data;
+    const data = fileCreateSpy.mock.calls[0][0].data;
     expect(data.file_name).toBe("report.pdf");
   });
 
@@ -50,7 +58,7 @@ describe("uploadFileFeishu file_name handling", () => {
       fileType: "stream",
     });
 
-    const data = createSpy.mock.calls[0][0].data;
+    const data = fileCreateSpy.mock.calls[0][0].data;
     expect(data.file_name).toBe("测试文件1.txt");
     expect(data.file_name).not.toContain("%");
   });
@@ -64,8 +72,46 @@ describe("uploadFileFeishu file_name handling", () => {
       fileType: "doc",
     });
 
-    const data = createSpy.mock.calls[0][0].data;
+    const data = fileCreateSpy.mock.calls[0][0].data;
     expect(data.file_name).toBe(name);
     expect(data.file_name).not.toContain("%");
+  });
+
+  it("passes Buffer directly for file uploads", async () => {
+    const file = Buffer.from("hello");
+
+    await uploadFileFeishu({
+      cfg,
+      file,
+      fileName: "report.xlsx",
+      fileType: "xls",
+    });
+
+    const data = fileCreateSpy.mock.calls[0][0].data;
+    expect(data.file).toBe(file);
+  });
+
+  it("rejects empty file buffers before calling Feishu", async () => {
+    await expect(
+      uploadFileFeishu({
+        cfg,
+        file: Buffer.alloc(0),
+        fileName: "empty.xlsx",
+        fileType: "xls",
+      }),
+    ).rejects.toThrow('Feishu media upload failed: "empty.xlsx" is empty (0 bytes)');
+
+    expect(fileCreateSpy).not.toHaveBeenCalled();
+  });
+
+  it("rejects empty image buffers before calling Feishu", async () => {
+    await expect(
+      uploadImageFeishu({
+        cfg,
+        image: Buffer.alloc(0),
+      }),
+    ).rejects.toThrow('Feishu media upload failed: "image" is empty (0 bytes)');
+
+    expect(imageCreateSpy).not.toHaveBeenCalled();
   });
 });
