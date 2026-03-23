@@ -91,8 +91,23 @@ function normalizeNonCodeSegments(text: string): string {
     .join("");
 }
 
+function normalizeCodeBlockFences(block: string): string {
+  const lines = block.split("\n");
+  return lines
+    .map((line) => {
+      // Fix opening and closing fences: remove leading whitespace
+      if (line.match(/^\s*```/)) {
+        return line.replace(/^\s+/, "");
+      }
+      return line;
+    })
+    .join("\n");
+}
+
 export function normalizeFeishuMarkdownLinks(text: string): string {
-  if (!text || (!text.includes("http://") && !text.includes("https://"))) {
+  if (!text) return text;
+  text = normalizeCodeBlockFences(text);
+  if (!text.includes("http://") && !text.includes("https://")) {
     return text;
   }
 
